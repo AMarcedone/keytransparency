@@ -29,6 +29,8 @@ import (
 	"golang.org/x/net/context"
 
 	tpb "github.com/google/keytransparency/core/proto/keytransparency_v1_types"
+
+	"github.com/golang/protobuf/proto"
 )
 
 const (
@@ -70,6 +72,27 @@ func Commit(userID, appID string, data []byte) ([]byte, *tpb.Committed, error) {
 		&tpb.Committed{Key: nonce, Data: data}, nil
 }
 
+type BCommitOutput struct{
+	Commitment []byte
+	TpbCommitted []byte
+}
+
+func BCommit(userID, appID string, data []byte) (*BCommitOutput, error) {
+	commitment,tpbCommitted,err := Commit(userID,appID,data)
+
+	if err != nil {
+		return &BCommitOutput{}, err
+	}
+
+	committed, err := proto.Marshal(tpbCommitted)
+	if err != nil {
+		return &BCommitOutput{}, err
+	}
+
+	return &BCommitOutput{commitment,committed}, nil
+}
+
+
 // Verify customizes a commitment with a userID.
 func Verify(userID, appID string, commitment []byte, committed *tpb.Committed) error {
 	if got, want := createCommitment(userID, appID, committed.Data, committed.Key),
@@ -77,6 +100,15 @@ func Verify(userID, appID string, commitment []byte, committed *tpb.Committed) e
 		return ErrInvalidCommitment
 	}
 	return nil
+}
+
+func BVerify(userID string, appID string, commitment []byte, committed_tpbCommitted []byte) error {
+	committed := &tpb.Committed{}
+	err := proto.Unmarshal(committed_tpbCommitted, committed)
+	if err != nil {
+		return err
+	}
+	return Verify(userID, appID, commitment, committed)
 }
 
 func createCommitment(userID, appID string, data, nonce []byte) []byte {
